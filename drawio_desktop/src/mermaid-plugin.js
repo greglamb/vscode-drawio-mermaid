@@ -19,11 +19,11 @@ var DialogMermaid = function (editorUi, shape) {
         graph.getModel().beginUpdate();
         graph.labelChanged(shape.state.cell,text);
         // To replace valueChanged in mxShapeMermaid.prototype.paintVertexShape
-        shape.updateImage(); 
+        shape.updateImage();
         shape.redraw();
         graph.getModel().endUpdate();
         editorUi.spinner.stop();
-  
+
         if (shape.state.cell != null) {
           graph.setSelectionCell(shape.state.cell);
           graph.scrollCellToVisible(shape.state.cell);
@@ -42,15 +42,15 @@ var DialogMermaid = function (editorUi, shape) {
      <div style="flex: 0 0 4em; display: flex; flex-direction: row; align-items: end">
       <pre id="plugin_mermaid_parserstatus" style="flex: 1; text-align: left;  overflow-x: auto"></pre>
       <div id="plugin_mermaid_buttons" style="flex: initial; text-align: right; align-self: flex-end;">
-      <p style="margin-block: unset; font-size: 90%"> 
+      <p style="margin-block: unset; font-size: 90%">
         <br />Download as |
         <a id="plugin_mermaid_button_dl_svg" href="#">SVG</a> |
-        <a id="plugin_mermaid_button_dl_png" href="#">PNG</a> | 
+        <a id="plugin_mermaid_button_dl_png" href="#">PNG</a> |
         <br />Copy as |
         <span style="display: none;"><a id="plugin_mermaid_button_html" href="#">HTML</a> | </span>
         <span style="display: none;"><a id="plugin_mermaid_button_svg" href="#">SVG</a> |  </span>
-        <a id="plugin_mermaid_button_png" href="#">PNG</a> | 
-        <br />Help | 
+        <a id="plugin_mermaid_button_png" href="#">PNG</a> |
+        <br />Help |
         <a target="_blank" href="https://mermaid-js.github.io/mermaid/#/./n00b-syntaxReference">Syntax</a> |
       </p><br /></div>
      </div>
@@ -61,7 +61,7 @@ var DialogMermaid = function (editorUi, shape) {
   // textarea.value = shape.state.cell.value;
   textarea.value = editorUi.editor.graph.convertValueToString(shape.state.cell); // Compatble with cell properties
 
-  
+
   var parserStatus = div.querySelector('#plugin_mermaid_parserstatus');
   var preview = div.querySelector('#plugin_mermaid_preview');
   var buttons = div.querySelector('#plugin_mermaid_buttons');
@@ -71,11 +71,11 @@ var DialogMermaid = function (editorUi, shape) {
   if (editorUi.diagramContainer.clientWidth < win_width) win_width = editorUi.diagramContainer.clientWidth - 20;
   if (editorUi.diagramContainer.clientHeight < win_height) win_height = editorUi.diagramContainer.clientHeight - 20;
 
-  var win = new mxWindow("Mermaid", div, 
-    (editorUi.diagramContainer.clientWidth - win_width) / 2 + editorUi.diagramContainer.offsetLeft, 
-    (editorUi.diagramContainer.clientHeight - win_height) / 2 + editorUi.diagramContainer.offsetTop, 
-    win_width, 
-    win_height, 
+  var win = new mxWindow("Mermaid", div,
+    (editorUi.diagramContainer.clientWidth - win_width) / 2 + editorUi.diagramContainer.offsetLeft,
+    (editorUi.diagramContainer.clientHeight - win_height) / 2 + editorUi.diagramContainer.offsetTop,
+    win_width,
+    win_height,
     true, true);
   win.setResizable(true);
   win.setMaximizable(true);
@@ -101,32 +101,42 @@ var DialogMermaid = function (editorUi, shape) {
       evt.preventDefault();
     };
 
-    function checkMermaidScript() {
+    async function checkMermaidScript() {
       try {
         mermaid.parse(textarea.value);
         parserStatus.innerHTML = 'no error detected';
 
         // Display preview
-        let insertSvg = function (svgCode, bindFunctions) { 
-          preview.innerHTML = svgCode;   /* bindFunctions(preview); */ 
+        let insertSvg = function (svgCode, bindFunctions) {
+          preview.innerHTML = svgCode;   /* bindFunctions(preview); */
           preview.querySelector('#graph-div').style.height = 'inherit';
         };
         var code = textarea.value;
         preview.innerHTML  = code.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        mermaid.init(shape.getRenderOptions() , preview);
-        if (code) mermaid.render('graph-div', code, insertSvg);
+        // * Mermaid 8.13.3 Implementation:
+        // mermaid.init(shape.getRenderOptions() , preview);
+        // if (code) mermaid.render('graph-div', code, insertSvg);
+        // * Mermaid 11.4.1 Implementation:
+        // global config once per editor
+        mermaid.initialize(shape.getRenderOptions());
 
+        // (1) light-weight DOM pass for class="mermaid" nodes you already dropped in
+        await mermaid.run({ nodes: [preview] });
+
+        // (2) explicit render for this shape so we can inject SVG exactly where we need it
+        const { svg, bindFunctions } = await mermaid.render('graph-div', code);
+        insertSvg(svg, bindFunctions);
       } catch (e) {
         parserStatus.innerHTML = e.str;
       }
     }
-    
+
     function handleInput(evt) {
       evt.stopPropagation();
       evt.preventDefault();
       checkMermaidScript();
     }
-    
+
     checkMermaidScript();
     // Setup the dnd listeners.
     textarea.addEventListener('dragover', handleDragOver, false);
@@ -160,13 +170,13 @@ var DialogMermaid = function (editorUi, shape) {
           context.fillStyle = background;
           context.fillRect(0, 0, canvas.width, canvas.height);
         }
-        
+
         context.drawImage(img, svg.getBBox().x * scale, svg.getBBox().y * scale, svg.getBBox().width * scale, svg.getBBox().height * scale);
         window.URL.revokeObjectURL(url);
 
         callback(canvas);
     }
-    img.src = url;  
+    img.src = url;
   }
 
   div.querySelector('#plugin_mermaid_button_dl_svg').onclick = async function() {
@@ -175,7 +185,7 @@ var DialogMermaid = function (editorUi, shape) {
     aDownloadLink.href = "data:image/svg+xml;base64," +  btoa(unescape(encodeURIComponent(div.querySelector('#graph-div').outerHTML)));
     aDownloadLink.click();
   }
-  
+
   div.querySelector('#plugin_mermaid_button_dl_png').onclick = async function() {
     generateCanvas(function(canvas) {
       var aDownloadLink = document.createElement('a');
@@ -184,7 +194,7 @@ var DialogMermaid = function (editorUi, shape) {
       aDownloadLink.click();
     });
   }
-  
+
   div.querySelector('#plugin_mermaid_button_png').onclick = async function() {
       generateCanvas(function(canvas) {
         canvas.toBlob(function(imgBlob) {
@@ -193,18 +203,18 @@ var DialogMermaid = function (editorUi, shape) {
       }, 'white');
   }
 
-  // (hidden) Buggy - Oddly makes the whole electron stop working... 
+  // (hidden) Buggy - Oddly makes the whole electron stop working...
   div.querySelector('#plugin_mermaid_button_svg').onclick = async function() {
     var svg_xml = (new XMLSerializer()).serializeToString(div.querySelector('#graph-div'));
     var svg_blob = new Blob([svg_xml], {type : 'image/svg+xml;charset=utf-8'});
     var clip_item = new ClipboardItem( {'image/svg+xml': svg_blob } );
     navigator.clipboard.write( [ clip_item  ] );
   }
-  
-  // (hidden) Tested, but not very usefull as not much destination applications support it... (Libreoffice Writer, with poor SVG render) 
+
+  // (hidden) Tested, but not very usefull as not much destination applications support it... (Libreoffice Writer, with poor SVG render)
   div.querySelector('#plugin_mermaid_button_html').onclick = async function() {
     navigator.clipboard.write( [ new ClipboardItem(
-      { 'text/html' : new Blob(["<img src='" + "data:image/svg+xml;base64," + 
+      { 'text/html' : new Blob(["<img src='" + "data:image/svg+xml;base64," +
             btoa(unescape(encodeURIComponent(div.querySelector('#graph-div').outerHTML))) + "'>"], {type : 'text/html'}) }) ]
     );
   }
@@ -261,9 +271,8 @@ Draw.loadPlugin(function (ui) {
   }
 
   // Result is updated back in EditorUi.defaultMermaidConfig to have consistent settings with native mermaid
-  // Note that the result will not be consistent if the diagram is updated in native mermaid without the plugin, 
+  // Note that the result will not be consistent if the diagram is updated in native mermaid without the plugin,
   // but no solution would be perfect until native mermaid allow some configuration...
-  // As mermaid version are not the same between native mermaid and the plugin one, render may be different.
   window.EditorUi.defaultMermaidConfig = mermaid_settings;
 
   // Handle defaults
@@ -313,10 +322,10 @@ Draw.loadPlugin(function (ui) {
 	ui.menus.createPopupMenu = function(menu, cell, evt)
 	{
 		uiCreatePopupMenu.apply(this, arguments);
-		
+
 		var graph = ui.editor.graph;
     var cell = graph.getSelectionCell();
-		
+
 		if (isCellPluginMermaid(cell)) {
 			this.addMenuItems(menu, ['-', 'mermaidconvertto'], null, evt);
 		}
@@ -342,7 +351,7 @@ Draw.loadPlugin(function (ui) {
       let image = state.shape.image.replace(";base64",""); // ;base64 breaks the style
       graph.setCellStyle('shape=image;noLabel=1;verticalAlign=top;imageAspect=1;' + 'image=' + image + ';', [cell]);
       graph.setAttributeForCell(cell, 'mermaidData', mermaidData );
-      
+
       graph.view.getState(cell, true).destroy();
       graph.view.getState(cell, true);
     }
@@ -377,7 +386,7 @@ Draw.loadPlugin(function (ui) {
         } else {
           style += encodeURI(basestyle) + "=" + encodeURI(value) + ";";
         }
-      }  
+      }
 
       let configDiff = diff(mermaid_plugin_defaults, data.config);
       addToStyle('', configDiff);
@@ -391,12 +400,12 @@ Draw.loadPlugin(function (ui) {
       graph.view.getState(cell, true).destroy();
       graph.view.getState(cell, true);
 
-    } 
-    catch (error) 
+    }
+    catch (error)
     {
       console.error(error);
-    } 
-    finally 
+    }
+    finally
     {
       graph.getModel().endUpdate();
     }
@@ -408,6 +417,3 @@ Draw.loadPlugin(function (ui) {
 
 
 });
-
-
-
